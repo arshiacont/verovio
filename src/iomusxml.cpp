@@ -471,16 +471,7 @@ Layer *MusicXmlInput::SelectLayer(pugi::xml_node node, Measure *measure)
         layerNum = 1;
     }
 
-    // If not initialized and layer is not set - get first layer in the first staff
-    if (!m_currentLayer) {
-        Staff *staff = vrv_cast<Staff *>(measure->GetChild(0, STAFF));
-        assert(staff);
-        m_currentLayer = SelectLayer(layerNum, staff);
-        m_isLayerInitialized = true;
-        return m_currentLayer;
-    }
-
-    // if not, take staff info of node element
+    // Take staff info of node element, or default to the first staff
     short int staffNum = (node.child("staff")) ? node.child("staff").text().as_int() : 1;
     if ((staffNum < 1) || (staffNum > measure->GetStaffCount())) {
         LogWarning("MusicXML import: Staff %d cannot be found", staffNum);
@@ -3531,9 +3522,17 @@ void MusicXmlInput::ReadMusicXmlNote(
                     m_controlElements.push_back({ measureNum, fing });
                     const std::string startID = note ? ("#" + note->GetID()) : m_ID;
                     fing->SetStartid(startID);
-                    fing->SetStaff(staff->AttNInteger::StrToXsdPositiveIntegerList(std::to_string(staff->GetN())));
-                    fing->SetPlace(
-                        fing->AttPlacementRelStaff::StrToStaffrel(technicalChild.attribute("placement").as_string()));
+                    const bool hasValidNoteStaff = (noteStaffNum > 0) && (noteStaffNum <= measure->GetStaffCount());
+                    const int fingeringStaff = hasValidNoteStaff ? noteStaffNum + staffOffset : staff->GetN();
+                    fing->SetStaff(staff->AttNInteger::StrToXsdPositiveIntegerList(std::to_string(fingeringStaff)));
+                    data_STAFFREL place
+                        = fing->AttPlacementRelStaff::StrToStaffrel(technicalChild.attribute("placement").as_string());
+                    if ((place == STAFFREL_NONE) && technicalChild.attribute("default-y")) {
+                        const double defaultY = technicalChild.attribute("default-y").as_double()
+                            + technicalChild.attribute("relative-y").as_double();
+                        place = (defaultY >= 0.0) ? STAFFREL_above : STAFFREL_below;
+                    }
+                    fing->SetPlace(place);
                     fing->AddChild(text);
                 }
                 else if (technicalChildName == "thumb-position") {
