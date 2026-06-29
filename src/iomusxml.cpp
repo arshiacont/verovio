@@ -3616,6 +3616,8 @@ void MusicXmlInput::ReadMusicXmlNote(
         }
     }
 
+    const int elementEndTime = m_durTotal + duration;
+
     // add duration to measure time
     if (!nextIsChord) m_durTotal += duration;
 
@@ -3630,7 +3632,7 @@ void MusicXmlInput::ReadMusicXmlNote(
         breath->SetPlace(
             breath->AttPlacementRelStaff::StrToStaffrel(xmlBreath.node().attribute("placement").as_string()));
         breath->SetColor(xmlBreath.node().attribute("color").as_string());
-        breath->SetTstamp((double)(m_durTotal + duration) * (double)m_meterUnit / (double)(4 * m_ppq) - 0.1);
+        breath->SetTstamp((double)elementEndTime * (double)m_meterUnit / (double)(4 * m_ppq) + 1.0 - 0.1);
     }
 
     // caesura
