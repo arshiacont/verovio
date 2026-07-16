@@ -3148,19 +3148,28 @@ void MusicXmlInput::ReadMusicXmlNote(
                 std::string pitchAlter = PitchAlterToString(note->GetPname(), alterVal);
                 ListOfObjects accids = note->FindAllDescendantsByType(ACCID);
                 if (accids.empty()) {
+                    bool hasNonNaturalCurrentAccid = false;
+                    for (const auto &current : m_currentAccids.at(note->GetPname())) {
+                        if (((current.m_accid != ACCIDENTAL_WRITTEN_NONE)
+                                && (current.m_accid != ACCIDENTAL_WRITTEN_n))
+                            || !current.m_glyphName.empty()) {
+                            hasNonNaturalCurrentAccid = true;
+                            break;
+                        }
+                    }
+
                     // It can happen that the doc encodes the accidentals in the pitch/alter element only,
                     // regardless of key signature or bar lines. Handle this case here.
-                    if (alterVal != 0.0) {
-                        // In case this alter value is already associated with an accidental, use it here.
-                        if (m_alterAccids.contains(pitchAlter)) {
-                            m_currentAccids[note->GetPname()] = m_alterAccids.at(pitchAlter);
-                        }
-                        // Otherwise, deduce the generic accidental from this alter value.
-                        else {
-                            m_currentAccids[note->GetPname()].clear();
-                            m_currentAccids[note->GetPname()].push_back(musicxml::Accidental(
-                                Att::AccidentalGesturalToWritten(ConvertAlterToAccid(alterVal)), "", ""));
-                        }
+                    // In case this alter value is already associated with an accidental, use it here.
+                    if (m_alterAccids.contains(pitchAlter)) {
+                        m_currentAccids[note->GetPname()] = m_alterAccids.at(pitchAlter);
+                    }
+                    // Otherwise, deduce the generic accidental from this alter value. A zero alter value must also
+                    // override a non-natural accidental carried from the key signature or an earlier note.
+                    else if ((alterVal != 0.0) || hasNonNaturalCurrentAccid) {
+                        m_currentAccids[note->GetPname()].clear();
+                        m_currentAccids[note->GetPname()].push_back(musicxml::Accidental(
+                            Att::AccidentalGesturalToWritten(ConvertAlterToAccid(alterVal)), "", ""));
                     }
 
                     try {
