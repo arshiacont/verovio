@@ -10,12 +10,43 @@
 //----------------------------------------------------------------------------
 
 #include <cassert>
+#include <cstdint>
+#include <limits>
 #include <math.h>
 #include <numeric>
+#include <stdexcept>
 
 //----------------------------------------------------------------------------
 
 namespace vrv {
+
+namespace {
+
+int NarrowFractionComponent(std::int64_t value)
+{
+    if ((value < std::numeric_limits<int>::min()) || (value > std::numeric_limits<int>::max())) {
+        throw std::overflow_error("Fraction value is outside the supported integer range");
+    }
+    return static_cast<int>(value);
+}
+
+Fraction MakeFraction(std::int64_t numerator, std::int64_t denominator)
+{
+    if (denominator < 0) {
+        numerator = -numerator;
+        denominator = -denominator;
+    }
+
+    const std::int64_t gcd = std::gcd(numerator, denominator);
+    if (gcd != 0) {
+        numerator /= gcd;
+        denominator /= gcd;
+    }
+
+    return Fraction(NarrowFractionComponent(numerator), NarrowFractionComponent(denominator));
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------
 // Fraction
@@ -44,23 +75,35 @@ Fraction::Fraction(data_DURATION duration)
 
 Fraction Fraction::operator+(const Fraction &other) const
 {
-    int num = m_numerator * other.m_denominator + other.m_numerator * m_denominator;
-    int denom = m_denominator * other.m_denominator;
-    return Fraction(num, denom);
+    const std::int64_t gcd = std::gcd(m_denominator, other.m_denominator);
+    const std::int64_t leftMultiplier = other.m_denominator / gcd;
+    const std::int64_t rightMultiplier = m_denominator / gcd;
+    const std::int64_t numerator
+        = static_cast<std::int64_t>(m_numerator) * leftMultiplier + other.m_numerator * rightMultiplier;
+    const std::int64_t denominator = static_cast<std::int64_t>(m_denominator) * leftMultiplier;
+    return MakeFraction(numerator, denominator);
 }
 
 Fraction Fraction::operator-(const Fraction &other) const
 {
-    int num = m_numerator * other.m_denominator - other.m_numerator * m_denominator;
-    int denom = m_denominator * other.m_denominator;
-    return Fraction(num, denom);
+    const std::int64_t gcd = std::gcd(m_denominator, other.m_denominator);
+    const std::int64_t leftMultiplier = other.m_denominator / gcd;
+    const std::int64_t rightMultiplier = m_denominator / gcd;
+    const std::int64_t numerator
+        = static_cast<std::int64_t>(m_numerator) * leftMultiplier - other.m_numerator * rightMultiplier;
+    const std::int64_t denominator = static_cast<std::int64_t>(m_denominator) * leftMultiplier;
+    return MakeFraction(numerator, denominator);
 }
 
 Fraction Fraction::operator*(const Fraction &other) const
 {
-    int num = m_numerator * other.m_numerator;
-    int denom = m_denominator * other.m_denominator;
-    return Fraction(num, denom);
+    const std::int64_t leftReduction = std::gcd<std::int64_t>(m_numerator, other.m_denominator);
+    const std::int64_t rightReduction = std::gcd<std::int64_t>(other.m_numerator, m_denominator);
+    const std::int64_t numerator
+        = (m_numerator / leftReduction) * static_cast<std::int64_t>(other.m_numerator / rightReduction);
+    const std::int64_t denominator
+        = (m_denominator / rightReduction) * static_cast<std::int64_t>(other.m_denominator / leftReduction);
+    return MakeFraction(numerator, denominator);
 }
 
 Fraction Fraction::operator/(const Fraction &other) const
@@ -69,9 +112,15 @@ Fraction Fraction::operator/(const Fraction &other) const
         LogDebug("Cannot divide by zero.");
         return *this;
     }
-    int num = m_numerator * other.m_denominator;
-    int denom = m_denominator * other.m_numerator;
-    return Fraction(num, denom);
+    const std::int64_t numeratorReduction = std::gcd<std::int64_t>(m_numerator, other.m_numerator);
+    const std::int64_t denominatorReduction = std::gcd<std::int64_t>(other.m_denominator, m_denominator);
+    const std::int64_t numerator
+        = (m_numerator / numeratorReduction)
+        * static_cast<std::int64_t>(other.m_denominator / denominatorReduction);
+    const std::int64_t denominator
+        = (m_denominator / denominatorReduction)
+        * static_cast<std::int64_t>(other.m_numerator / numeratorReduction);
+    return MakeFraction(numerator, denominator);
 }
 
 Fraction Fraction::operator%(const Fraction &other) const
@@ -81,29 +130,25 @@ Fraction Fraction::operator%(const Fraction &other) const
         return *this;
     }
 
-    // Convert both fractions to common denominator
-    int commonDenominator = m_denominator * other.m_denominator;
-    int leftNumerator = m_numerator * other.m_denominator;
-    int rightNumerator = other.m_numerator * m_denominator;
-
-    // Integer quotient
-    int quotient = leftNumerator / rightNumerator;
-
-    // Remainder as a fraction
-    Fraction remainder(leftNumerator - quotient * rightNumerator, commonDenominator);
-    remainder.Reduce();
-
-    return remainder;
+    const std::int64_t gcd = std::gcd(m_denominator, other.m_denominator);
+    const std::int64_t leftMultiplier = other.m_denominator / gcd;
+    const std::int64_t rightMultiplier = m_denominator / gcd;
+    const std::int64_t leftNumerator = static_cast<std::int64_t>(m_numerator) * leftMultiplier;
+    const std::int64_t rightNumerator = static_cast<std::int64_t>(other.m_numerator) * rightMultiplier;
+    const std::int64_t commonDenominator = static_cast<std::int64_t>(m_denominator) * leftMultiplier;
+    return MakeFraction(leftNumerator % rightNumerator, commonDenominator);
 }
 
 bool Fraction::operator==(const Fraction &other) const
 {
-    return m_numerator * other.m_denominator == other.m_numerator * m_denominator;
+    return static_cast<std::int64_t>(m_numerator) * other.m_denominator
+        == static_cast<std::int64_t>(other.m_numerator) * m_denominator;
 }
 
 std::strong_ordering Fraction::operator<=>(const Fraction &other) const
 {
-    return m_numerator * other.m_denominator <=> other.m_numerator * m_denominator;
+    return static_cast<std::int64_t>(m_numerator) * other.m_denominator
+        <=> static_cast<std::int64_t>(other.m_numerator) * m_denominator;
 }
 
 double Fraction::ToDouble() const
