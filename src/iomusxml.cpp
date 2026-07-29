@@ -4307,11 +4307,34 @@ void MusicXmlInput::ReadMusicXmlTupletStart(const pugi::xml_node &node, const pu
     Tuplet *tuplet = new Tuplet();
     this->AddLayerElement(layer, tuplet);
     m_elementStackMap.at(layer).push_back(tuplet);
-    short int num = node.select_node("time-modification/actual-notes").node().text().as_int();
-    short int numbase = node.select_node("time-modification/normal-notes").node().text().as_int();
-    if (tupletStart.first_child()) {
-        num = tupletStart.select_node("tuplet-actual/tuplet-number").node().text().as_int();
-        numbase = tupletStart.select_node("tuplet-normal/tuplet-number").node().text().as_int();
+    int num = node.select_node("time-modification/actual-notes").node().text().as_int();
+    int numbase = node.select_node("time-modification/normal-notes").node().text().as_int();
+    const pugi::xml_node tupletActual = tupletStart.child("tuplet-actual");
+    const pugi::xml_node tupletNormal = tupletStart.child("tuplet-normal");
+    const int displayNum = tupletActual.child("tuplet-number").text().as_int();
+    const int displayNumbase = tupletNormal.child("tuplet-number").text().as_int();
+    if (displayNum > 0) num = displayNum;
+    if (displayNumbase > 0) numbase = displayNumbase;
+
+    const pugi::xml_node actualType = tupletActual.child("tuplet-type");
+    const pugi::xml_node normalType = tupletNormal.child("tuplet-type");
+    if ((displayNum > 0) && (displayNumbase > 0) && actualType && normalType) {
+        // MusicXML tuplet numbers describe the display and can refer to different note types. Normalize them to the
+        // same-type duration ratio expected by MEI @num and @numbase.
+        auto getDisplayDuration = [](const pugi::xml_node &portion, const pugi::xml_node &type) {
+            Fraction duration(ConvertTypeToDur(type.text().as_string()));
+            Fraction dotValue = duration;
+            for (pugi::xml_node dot = portion.child("tuplet-dot"); dot; dot = dot.next_sibling("tuplet-dot")) {
+                dotValue = dotValue / 2;
+                duration = duration + dotValue;
+            }
+            return duration;
+        };
+        const Fraction actualDuration = getDisplayDuration(tupletActual, actualType);
+        const Fraction normalDuration = getDisplayDuration(tupletNormal, normalType);
+        const Fraction normalizedNumbase = Fraction(displayNumbase) * normalDuration / actualDuration;
+        num = displayNum * normalizedNumbase.GetDenominator();
+        numbase = normalizedNumbase.GetNumerator();
     }
     if (num) tuplet->SetNum(num);
     if (numbase) tuplet->SetNumbase(numbase);
