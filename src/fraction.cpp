@@ -22,29 +22,29 @@ namespace vrv {
 
 namespace {
 
-int NarrowFractionComponent(std::int64_t value)
-{
-    if ((value < std::numeric_limits<int>::min()) || (value > std::numeric_limits<int>::max())) {
-        throw std::overflow_error("Fraction value is outside the supported integer range");
-    }
-    return static_cast<int>(value);
-}
-
-Fraction MakeFraction(std::int64_t numerator, std::int64_t denominator)
-{
-    if (denominator < 0) {
-        numerator = -numerator;
-        denominator = -denominator;
+    int NarrowFractionComponent(std::int64_t value)
+    {
+        if ((value < std::numeric_limits<int>::min()) || (value > std::numeric_limits<int>::max())) {
+            throw std::overflow_error("Fraction value is outside the supported integer range");
+        }
+        return static_cast<int>(value);
     }
 
-    const std::int64_t gcd = std::gcd(numerator, denominator);
-    if (gcd != 0) {
-        numerator /= gcd;
-        denominator /= gcd;
-    }
+    Fraction MakeFraction(std::int64_t numerator, std::int64_t denominator)
+    {
+        if (denominator < 0) {
+            numerator = -numerator;
+            denominator = -denominator;
+        }
 
-    return Fraction(NarrowFractionComponent(numerator), NarrowFractionComponent(denominator));
-}
+        const std::int64_t gcd = std::gcd(numerator, denominator);
+        if (gcd != 0) {
+            numerator /= gcd;
+            denominator /= gcd;
+        }
+
+        return Fraction(NarrowFractionComponent(numerator), NarrowFractionComponent(denominator));
+    }
 
 } // namespace
 
@@ -115,11 +115,9 @@ Fraction Fraction::operator/(const Fraction &other) const
     const std::int64_t numeratorReduction = std::gcd<std::int64_t>(m_numerator, other.m_numerator);
     const std::int64_t denominatorReduction = std::gcd<std::int64_t>(other.m_denominator, m_denominator);
     const std::int64_t numerator
-        = (m_numerator / numeratorReduction)
-        * static_cast<std::int64_t>(other.m_denominator / denominatorReduction);
+        = (m_numerator / numeratorReduction) * static_cast<std::int64_t>(other.m_denominator / denominatorReduction);
     const std::int64_t denominator
-        = (m_denominator / denominatorReduction)
-        * static_cast<std::int64_t>(other.m_numerator / numeratorReduction);
+        = (m_denominator / denominatorReduction) * static_cast<std::int64_t>(other.m_numerator / numeratorReduction);
     return MakeFraction(numerator, denominator);
 }
 
